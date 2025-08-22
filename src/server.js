@@ -3,11 +3,17 @@ const express = require('express')
 const app = express()
 const cookieParser = require('cookie-parser')
 const pool = require('./db.js')
+const cors = require('cors')
 
 
 app.use(express.json())//Para leer json
 app.use(express.urlencoded({extended:true}))//Para leer formularios
 app.use(cookieParser())//Para poder mandar cookies al forntend
+app.use(cors({
+    origin:'http://localhost:3000'
+}))
+
+
 
 
 app.get('/',(req,res)=>{
@@ -30,7 +36,17 @@ app.get('/pizzas',async(req,res)=>{
 
 })
 
-const PORT=3000
+
+app.post('/register',(req,res)=>{
+    const body = req.body
+
+    console.log('El cuerpo del body:',body);
+
+    res.json({"message":"Datos recibidos con éxito"})
+    
+})
+
+const PORT=5000
 app.listen(PORT,()=>{
-    console.log('Funcionando en el puerto 3000');
+    console.log('Funcionando en el puerto 5000');
 })
