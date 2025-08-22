@@ -37,6 +37,16 @@ app.get('/pizzas',async(req,res)=>{
 })
 
 
+app.post('/login',(req,res)=>{
+    const body = req.body
+
+    console.log('El cuerpo del body:',body);
+
+    res.json({"message":"Datos recibidos con éxito"})
+    
+})
+
+
 app.post('/register',(req,res)=>{
     const body = req.body
 
