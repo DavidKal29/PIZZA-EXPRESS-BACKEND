@@ -20,21 +20,7 @@ app.get('/',(req,res)=>{
     res.send('Esto funciona a la perfección')
 })
 
-app.get('/pizzas',async(req,res)=>{
-    const conn = await pool.getConnection()
 
-    const [pizzas] = await conn.query('SELECT * FROM pizzas')
-
-    console.log("Las pizzas:",pizzas);
-    
-
-    if (pizzas.length>0) {
-        res.status(200).send(pizzas)
-    }else{
-        res.status(404).json({"message":"No se han encontrado las pizzas"})
-    }
-
-})
 
 
 app.post('/login',(req,res)=>{
@@ -54,6 +40,27 @@ app.post('/register',(req,res)=>{
 
     res.json({"message":"Datos recibidos con éxito"})
     
+})
+
+app.get('/pizzas',async(req,res)=>{
+    const conn = await pool.getConnection()
+
+    const consulta = `SELECT p.id,p.nombre,p.precio,p.imagen,GROUP_CONCAT(i.nombre SEPARATOR ',') as ingredientes 
+        FROM pizzas p 
+        INNER JOIN pizza_ingredientes as pi 
+        ON p.id = pi.id_pizza 
+        INNER JOIN ingredientes as i 
+        ON pi.id_ingrediente = i.id 
+        GROUP BY p.id, p.nombre, p.precio, p.imagen;
+    `
+
+    const [results] = await conn.query(consulta)
+
+    if (results.length>0) {
+        res.send(results)
+    }else{
+        res.json({"message":"Imbecil"})
+    }
 })
 
 const PORT=5000
