@@ -56,10 +56,15 @@ app.get('/pizzas',async(req,res)=>{
 
     const [results] = await conn.query(consulta)
 
+    console.log('Consulta ha llegado');
+
+    conn.release()
+    
+
     if (results.length>0) {
-        res.send(results)
+        res.json(results)
     }else{
-        res.json({"message":"Imbecil"})
+        res.json([])
     }
 })
 
