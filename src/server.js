@@ -1,11 +1,18 @@
 //Iniciamos la app de express
 const express = require('express')
 const app = express()
-const cookieParser = require('cookie-parser')
+
+//Herramientas para login/register/api
 const pool = require('./db.js')
 const cors = require('cors')
+const bcrypt = require('bcryptjs')
+
+//Herramientas para el auth
+const jwt = require('jsonwebtoken')
+const cookieParser = require('cookie-parser')
 
 
+//Usos de la aplicacion
 app.use(express.json())//Para leer json
 app.use(express.urlencoded({extended:true}))//Para leer formularios
 app.use(cookieParser())//Para poder mandar cookies al forntend
@@ -15,30 +22,68 @@ app.use(cors({
 
 
 
-
 app.get('/',(req,res)=>{
     res.send('Esto funciona a la perfección')
 })
 
 
+app.post('/login',async(req,res)=>{
+    let {email,password} = req.body
 
+    const conn = await pool.getConnection()
 
-app.post('/login',(req,res)=>{
-    const body = req.body
+    const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
 
-    console.log('El cuerpo del body:',body);
+    if (user_exists.length>0) {
+        console.log('El usuario ya existe');
 
-    res.json({"message":"Datos recibidos con éxito"})
+        const equalPassword = await bcrypt.compare(password,user_exists[0].password)
+
+        if (equalPassword) {
+            console.log('EL usuario ha sido loqueado con éxito');
+            
+            res.json({"user":user_exists[0]})
+        }else{
+            console.log('El usuario existe pero contraseña equivocada');
+
+            res.json({"message":"El usuario existe pero contraseña equivocada"})
+            
+        }
+              
+    }else{
+        console.log('Usuario no existe');
+
+        res.json({"message":"Usuario no existe"})
+        
+    }
     
 })
 
 
-app.post('/register',(req,res)=>{
-    const body = req.body
+app.post('/register',async(req,res)=>{
+    let {email,username,password} = req.body
 
-    console.log('El cuerpo del body:',body);
+    const conn = await pool.getConnection()
 
-    res.json({"message":"Datos recibidos con éxito"})
+    const encriptedPassword = await bcrypt.hash(password,10)
+
+    const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
+
+    if (user_exists.length>0) {
+        console.log('El usuario ya existe');
+        
+        res.json({"message":"El usuario ya existe"})
+    }else{
+        await conn.query('INSERT INTO usuarios (email, username, password) VALUES (?,?,?)',[email,username,encriptedPassword])
+
+        const [user] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
+
+        console.log('EL user:',user);
+
+        res.json({"user":user[0]})
+    }
+
+    
     
 })
 
