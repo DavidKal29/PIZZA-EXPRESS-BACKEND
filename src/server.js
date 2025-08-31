@@ -59,7 +59,8 @@ app.post('/login',async(req,res)=>{
             res.cookie('token',token,{
                 httpOnly: true,//Para que no se pueda leer desde el el DOM
                 secure:false, //De momento false porque no tenemos https
-                maxAge: 3600 * 1000 //Maximo 1 hora de expiracion
+                maxAge: 3600 * 1000, //Maximo 1 hora de expiracion
+                sameSite:'lax'//La cookie solo se envia entre backend y dominios que esten en CORS  
             })
 
             
@@ -205,85 +206,6 @@ app.get('/pizzas',async(req,res)=>{
         res.json(results)
     }else{
         res.json([])
-    }
-})
-
-
-app.get('/cart/addOne/:id_pizza',async(req,res)=>{
-    const id_pizza = req.params.id_pizza
-
-    const result = checkLogin(req,res)
-
-    const conn = await pool.getConnection()
-
-    if (result.user) {
-        const id_usuario = result.user.id
-
-
-        const [cart_exists] = await conn.query('SELECT * FROM carrito WHERE id_pizza = ? and id_usuario = ?',[id_pizza,id_usuario])
-
-        if (cart_exists.length>0) {
-            await conn.query('UPDATE carrito SET cantidad=cantidad+1, precio_total=precio_total+precio_unitario WHERE id_usuario = ? and id_pizza = ?',[id_usuario,id_pizza])
-
-            res.status(200).json({"message":"Añadido al carrito"})
-        }else{
-
-            const [results] = await conn.query('SELECT precio FROM pizzas WHERE id = ?',[id_pizza])
-
-            if (results.length>0) {
-                const precio = results[0].precio
-                await conn.query('INSERT INTO carrito (id_usuario,id_pizza,cantidad,precio_total,precio_unitario) VALUES(?,?,?,?,?)',[id_usuario,id_pizza,1,precio,precio])
-
-                res.status(200).json({"message":"Añadido al carrito"})
-            }else{
-                res.status(404).json({"message":"No existe ese producto en el carrito"})
-            }
-
-            
-        }
-
-        
-    }else{
-        res.status(500).json({"message":"No existe usuario con ese id"})
-    }
-})
-
-
-app.get('/cart',async(req,res)=>{
-    const conn = await pool.getConnection()
-    console.log('HEMOS ENTRADO AL CARRITO / CART');
-    
-
-    const results = checkLogin(req,res)
-
-    if (results.user) {
-        const id_user = results.user.id
-
-        const consulta = `SELECT p.nombre, p.imagen, c.id, c.id_usuario, c.id_pizza, c.cantidad, c.precio_total
-        FROM pizzas p 
-        INNER JOIN carrito as c
-        ON p.id = c.id_pizza
-        WHERE c.id_usuario = ?
-        `
-
-        const [cart] = await conn.query(consulta,[id_user])
-
-        console.log('El carrito:',cart);
-        
-
-        if (cart.length>0) {
-            console.log('El carrito tiene datos');
-            
-            res.json({"cart":cart})
-        }else{
-            console.log('El carrito no tien edatos');
-            
-            res.json({"cart":[]})
-        }
-
-
-    }else{
-        res.json({"message":"Not Logged User"})
     }
 })
 
