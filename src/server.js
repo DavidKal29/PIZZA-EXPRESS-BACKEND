@@ -210,6 +210,117 @@ app.get('/pizzas',async(req,res)=>{
 })
 
 
+const generar_numero_pedido = (id_user)=>{
+
+    let numero = ''
+
+    const abecedario = [
+        "A","B","C","D","E","F","G","H","I","J","K","L",
+        "M","N","Ñ","O","P","Q","R","S","T","U","V","W",
+        "X","Y","Z"
+    ];
+
+
+    for (let i = 0; i < 3; i++) {
+        let num = Math.floor(Math.random()*9)
+        numero = numero + num
+
+        let letra = abecedario[Math.floor((Math.random()*abecedario.length)-1)]
+
+        numero = numero + letra
+
+        numero = numero + id_user
+
+        numero = numero + Math.floor(Math.random()*5+Number(id_user))
+        
+    }
+
+    return numero
+
+}
+
+
+
+app.post('/finalizarCompra',async(req,res)=>{
+    console.log('El body:',req.body);
+
+    const {nombreDestinatario,domicilio,localidad,codigoPostal,puerta,cart} = req.body
+
+    const conn = await pool.getConnection()
+
+    const result = checkLogin(req,res)
+
+    if (result.loggedIn) {
+        const user_id = result.user.id
+
+        if (cart.length>0) {
+
+            let precio_total = 0
+
+
+            for (let i = 0; i < cart.length; i++) {
+                let [precio] = await conn.query('SELECT precio FROM pizzas WHERE nombre = ?',[cart[i].nombre])
+
+                precio = parseFloat(precio[0].precio)
+
+                console.log('El presio:',precio);
+                
+
+                precio_total = precio_total + (precio * cart[i].cantidad)
+
+                
+            }
+
+            precio_total = precio_total.toFixed(2)
+
+            const numero_pedido = generar_numero_pedido(user_id)
+            
+            const consulta = 'INSERT INTO pedidos (numero_pedido,precio_total,id_usuario,nombre_destinatario,domicilio,localidad,puerta,codigo_postal) VALUES(?,?,?,?,?,?,?,?)'
+
+            const values = [numero_pedido,precio_total,user_id,nombreDestinatario,domicilio,localidad,puerta,codigoPostal]
+
+            await conn.query(consulta,values)
+
+
+
+
+            let [id_pedido] = await conn.query('SELECT id FROM pedidos ORDER BY id DESC LIMIT 1')
+
+            id_pedido = id_pedido[0].id
+
+            for (let i = 0; i < cart.length; i++) {
+                let [data] = await conn.query('SELECT id,precio FROM pizzas WHERE nombre = ?',[cart[i].nombre])
+
+                id_pizza = data[0].id
+
+                precio = parseFloat(data[0].precio)
+
+                console.log('El presio:',precio);
+                
+
+                precio = (precio * cart[i].cantidad)
+
+                precio = precio.toFixed(2)
+
+                await conn.query('INSERT INTO detalles_pedido (id_pedido,id_pizza,cantidad,precio) VALUES(?,?,?,?)',[id_pedido,id_pizza,cart[i].cantidad,precio])
+                
+            }
+
+
+
+
+        }
+
+        res.json({"message":"Pedido realizado"})
+    }else{
+        res.json({"message":"Usted no está logueado"})
+    }
+
+    
+    
+})
+
+
 
 
 const PORT=5000
