@@ -8,6 +8,18 @@ const dotenv = require('dotenv').config()
 const pool = require('./db.js')
 const cors = require('cors')
 const bcrypt = require('bcryptjs')
+const nodemailer = require('nodemailer')
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.CORREO,
+    pass: process.env.PASSWORD_DEL_CORREO
+  }
+});
+
+
+
 
 //Herramientas para el auth
 const jwt = require('jsonwebtoken')
@@ -379,6 +391,39 @@ app.get('/obtenerPedidos',async(req,res)=>{
     }
 })
 
+
+
+app.post('/recuperarPassword',async(req,res)=>{
+    const conn = await pool.getConnection()
+
+    const {email} = req.body
+
+    const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
+
+    if (user_exists.length>0) {
+
+        const mailOptions = {
+            from: process.env.CORREO,
+            to: email,
+            subject: "Prueba desde el server",
+            text: "¡Hola! Este es un correo enviado con Nodemailer desde el server"
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                console.log("Error al enviar:", error);
+                res.json({"message":"Error al enviar correo"})
+            }
+            console.log("Correo enviado:", info.response);
+            res.json({"message":"Correo enviado"})
+        });
+    }else{
+        console.log('EL usuario no existe');
+        res.json({"message":"El usuario no existe"})
+        
+    }
+
+})
 
 
 
