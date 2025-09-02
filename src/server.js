@@ -63,10 +63,14 @@ app.post('/login',async(req,res)=>{
                 sameSite:'lax'//La cookie solo se envia entre backend y dominios que esten en CORS  
             })
 
+            conn.release()
+
             
             res.json({"user":user_exists[0]})
         }else{
             console.log('El usuario existe pero contraseña equivocada');
+
+            conn.release()
 
             res.json({"message":"El usuario existe pero contraseña equivocada"})
             
@@ -74,6 +78,8 @@ app.post('/login',async(req,res)=>{
               
     }else{
         console.log('Usuario no existe');
+
+        conn.release()
 
         res.json({"message":"Usuario no existe"})
         
@@ -98,6 +104,8 @@ app.post('/register',async(req,res)=>{
 
     if (user_exists.length>0) {
         console.log('El usuario ya existe');
+
+        conn.release()
         
         res.json({"message":"El usuario ya existe"})
     }else{
@@ -117,6 +125,8 @@ app.post('/register',async(req,res)=>{
             secure:false, //De momento false porque no tenemos https
             maxAge: 3600 * 1000 //Maximo 1 hora de expiracion
         })
+
+        conn.release()
 
 
         res.json({"user":user})
@@ -281,9 +291,6 @@ app.post('/finalizarCompra',async(req,res)=>{
 
             await conn.query(consulta,values)
 
-
-
-
             let [id_pedido] = await conn.query('SELECT id FROM pedidos ORDER BY id DESC LIMIT 1')
 
             id_pedido = id_pedido[0].id
@@ -306,18 +313,70 @@ app.post('/finalizarCompra',async(req,res)=>{
                 
             }
 
-
-
-
         }
+
+        conn.release()
 
         res.json({"message":"Pedido realizado"})
     }else{
+
+        conn.release()
+
+
         res.json({"message":"Usted no está logueado"})
     }
 
     
     
+})
+
+
+app.get('/obtenerPedidos',async(req,res)=>{
+    const result = checkLogin(req,res)
+
+    if (result.loggedIn) {
+        const user_id = result.user.id
+
+        const conn = await pool.getConnection()
+
+        const pedidos = []
+
+        const [data] = await conn.query('SELECT * FROM pedidos WHERE id_usuario = ? ORDER BY id DESC',[user_id])
+
+        //console.log('La data:',data);
+        
+
+        for (let i = 0; i < data.length; i++) {
+            const consulta = `SELECT dp.cantidad, dp.precio, p.id, p.imagen, p.nombre, p.precio as precio_unitario
+            FROM detalles_pedido dp
+            INNER JOIN pizzas p
+            ON dp.id_pizza = p.id
+            WHERE dp.id_pedido = ?
+            `
+
+            const [detalles_pedido] = await conn.query(consulta,[data[i].id])
+
+            console.log('Los detalles del pedido:',detalles_pedido);
+            
+
+            pedidos.push({pedido:data[i], detalles_pedido:detalles_pedido})
+            
+        }
+
+        console.log('Los pedidos:',pedidos);
+        //console.log('Los detallles del primer pedido:',pedidos[0].detalles_pedido);
+        
+        conn.release()
+
+        res.json({"message":pedidos})
+        
+
+
+    }else{
+
+        conn.release()
+        res.json({"message":"Usted no está logueado"})
+    }
 })
 
 
