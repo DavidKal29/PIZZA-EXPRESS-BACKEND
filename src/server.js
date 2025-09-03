@@ -402,11 +402,13 @@ app.post('/recuperarPassword',async(req,res)=>{
 
     if (user_exists.length>0) {
 
+        const token = jwt.sign({email:email},JWT_SECRET)
+
         const mailOptions = {
             from: process.env.CORREO,
             to: email,
-            subject: "Prueba desde el server",
-            text: "¡Hola! Este es un correo enviado con Nodemailer desde el server"
+            subject: "Recuperación de Contraseña",
+            text: `Para recuperar el password, entre en este enlace -> http://localhost:3000/cambiarPassword/${token}`
         };
 
         transporter.sendMail(mailOptions, (error, info) => {
@@ -415,13 +417,74 @@ app.post('/recuperarPassword',async(req,res)=>{
                 res.json({"message":"Error al enviar correo"})
             }
             console.log("Correo enviado:", info.response);
-            res.json({"message":"Correo enviado"})
+
         });
+
+    
+        await conn.query('UPDATE usuarios SET token = ? WHERE email = ?',[token,email])
+
+        res.json({"message":"Correo enviado","token":token})
     }else{
         console.log('EL usuario no existe');
         res.json({"message":"El usuario no existe"})
         
     }
+
+})
+
+app.post('/cambiarPassword/:token',async(req,res)=>{
+
+    console.log('He caido asqui');
+    
+
+    const token = req.params.token
+
+    console.log('El token:',token);
+    
+
+    const conn = await pool.getConnection()
+
+    try {
+        const decoded = jwt.verify(token,JWT_SECRET)
+        
+        const email = decoded.email
+
+        const [data] = await conn.query('SELECT token FROM usuarios WHERE email = ? and token = ?',[email,token])
+
+        if (data.length>0) {
+
+            const {new_password,confirm_password} = req.body
+
+            if (new_password===confirm_password) {
+
+                const [datos] = await conn.query('SELECT password FROM usuarios WHERE email = ?',[email])
+
+                if (datos.length>0) {
+                    const password_equals = await bcrypt.compare(new_password,datos[0].password)
+
+                    if (password_equals) {
+                        res.json({"message":"Las contraseñas son iguales"})
+                    }else{
+                        const new_encripted_password = await bcrypt.hash(new_password,10)
+                        await conn.query('UPDATE usuarios SET password = ?',[new_encripted_password])
+
+                        await conn.query('UPDATE usuarios SET token = "" WHERE email = ? and token = ?',[email,token])
+                        res.json({"message":"Contraseña cambiada con éxito"})
+                    }
+                }
+            }else{
+                res.json({"message":"Contraseñas coinciden"})
+            }
+
+        }else{
+            res.json({"message":"Todo mal, token no existe en el usuario"})
+        }
+
+    } catch (error) {
+        res.json({"message":"Token Invalido"})
+    }
+
+    
 
 })
 
