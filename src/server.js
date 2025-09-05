@@ -109,9 +109,7 @@ app.post('/register',async(req,res)=>{
 
     const encriptedPassword = await bcrypt.hash(password,10)
 
-    const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
-
-    console.log('queee');
+    const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ? or username = ?',[email,username])
     
 
     if (user_exists.length>0) {
@@ -463,7 +461,7 @@ app.post('/cambiarPassword/:token',async(req,res)=>{
                     const password_equals = await bcrypt.compare(new_password,datos[0].password)
 
                     if (password_equals) {
-                        res.json({"message":"Las contraseñas son iguales"})
+                        res.json({"message":"Las nueva contraseña no puede ser igual a la anterior"})
                     }else{
                         const new_encripted_password = await bcrypt.hash(new_password,10)
                         await conn.query('UPDATE usuarios SET password = ?',[new_encripted_password])
@@ -473,11 +471,11 @@ app.post('/cambiarPassword/:token',async(req,res)=>{
                     }
                 }
             }else{
-                res.json({"message":"Contraseñas coinciden"})
+                res.json({"message":"Contraseñas no coinciden"})
             }
 
         }else{
-            res.json({"message":"Todo mal, token no existe en el usuario"})
+            res.json({"message":"Solo se puede cambiar una vez, solicite nuevo token"})
         }
 
     } catch (error) {
@@ -488,9 +486,7 @@ app.post('/cambiarPassword/:token',async(req,res)=>{
 
 })
 
-
-
-const PORT=5000
-app.listen(PORT,()=>{
-    console.log('Funcionando en el puerto 5000');
+app.listen(5000,()=>{
+    console.log('Escuchando en el 5000');
+    
 })
