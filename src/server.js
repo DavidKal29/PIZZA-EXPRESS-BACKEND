@@ -25,18 +25,18 @@ const cookieParser = require('cookie-parser')
 const JWT_SECRET=process.env.JWT_SECRET
 
 //Middlewares
-app.use(express.json()) //Para leer json
-app.use(express.urlencoded({extended:true})) //Para leer formularios
-app.use(cookieParser()) //Para poder mandar cookies al frontend
+app.use(express.json())
+app.use(express.urlencoded({extended:true}))
+app.use(cookieParser())
 app.use(cors({
-    origin:'http://localhost:3000',
-    credentials: true //Para enviar cookies
+    origin: process.env.FRONTEND_URL, 
+    credentials: true
 }))
 
 //Ruta de prueba
 app.get('/',(req,res)=>{
     try{
-        res.send('Esto funciona a la perfección')
+        res.send('Backend funcionando correctamente en producción 🚀')
     }catch(error){
         res.status(500).json({message:"Error en la ruta /"})
     }
@@ -50,38 +50,30 @@ app.post('/login',async(req,res)=>{
         const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
 
         if (user_exists.length>0) {
-            //Usuario encontrado
-            console.log('El usuario ya existe');
             const equalPassword = await bcrypt.compare(password,user_exists[0].password)
 
             if (equalPassword) {
-                console.log('EL usuario ha sido loqueado con éxito');
                 const id = user_exists[0].id
                 const username = user_exists[0].username
                 const email = user_exists[0].email
                 const user = {id:id,email:email,username:username}
                 
-                //Generamos token
                 const token = jwt.sign(user,JWT_SECRET,{expiresIn:'1h'})
 
                 res.cookie('token',token,{
                     httpOnly: true,
-                    secure:false,
+                    secure:true,
                     maxAge: 3600 * 1000,
-                    sameSite:'lax'
+                    sameSite:'none'
                 })
 
                 conn.release()
                 res.json({"user":user_exists[0]})
             }else{
-                //Contraseña incorrecta
-                console.log('El usuario existe pero contraseña equivocada');
                 conn.release()
-                res.json({"message":"El usuario existe pero contraseña equivocada"})
+                res.json({"message":"Contraseña incorrecta"})
             }
         }else{
-            //Usuario no existe
-            console.log('Usuario no existe');
             conn.release()
             res.json({"message":"Usuario no existe"})
         }
@@ -99,7 +91,6 @@ app.post('/register',async(req,res)=>{
         const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ? or username = ?',[email,username])
         
         if (user_exists.length>0) {
-            console.log('El usuario ya existe');
             conn.release()
             res.json({"message":"El usuario ya existe"})
         }else{
@@ -110,8 +101,9 @@ app.post('/register',async(req,res)=>{
 
             res.cookie('token',token,{
                 httpOnly: true,
-                secure:false,
-                maxAge: 3600 * 1000
+                secure:true,
+                maxAge: 3600 * 1000,
+                sameSite:'none'
             })
 
             conn.release()
@@ -126,17 +118,13 @@ app.post('/register',async(req,res)=>{
 const checkLogin = (req,res)=>{
     const token = req.cookies.token
     if (!token) {
-        const result = {loggedIn:false}
-        return result
+        return {loggedIn:false}
     }else{
         try {
             const user_decoded = jwt.verify(token,JWT_SECRET)
-            console.log('usuario logueado');
-            const result = {loggedIn:true,user:user_decoded}
-            return result
+            return {loggedIn:true,user:user_decoded}
         } catch (error) {
-            const result = {loggedIn:false}
-            return result   
+            return {loggedIn:false}   
         }
     }
 }
@@ -144,7 +132,6 @@ const checkLogin = (req,res)=>{
 //Ruta para verificar login
 app.get('/me',(req,res)=>{
     try{
-        console.log('Comprobando login');
         const result = checkLogin(req,res)
         res.json(result)
     }catch(error){
@@ -158,9 +145,9 @@ app.get('/logout',(req,res)=>{
         const result = checkLogin(req,res)
         if (result.loggedIn) {
             res.clearCookie('token',{
-                maxAge:3600 * 1000,
                 httpOnly:true,
-                secure:false
+                secure:true,
+                sameSite:'none'
             })
         }
         res.json({"message":"Logout"})
@@ -182,7 +169,6 @@ app.get('/pizzas',async(req,res)=>{
             GROUP BY p.id, p.nombre, p.precio, p.imagen;
         `
         const [results] = await conn.query(consulta)
-        console.log('Los resultados de las pizzas:',results);
         conn.release()
         res.json(results.length>0 ? results : [])
     }catch(error){
@@ -236,8 +222,8 @@ app.post('/finalizarCompra',async(req,res)=>{
 
                 for (let i = 0; i < cart.length; i++) {
                     let [data] = await conn.query('SELECT id,precio FROM pizzas WHERE nombre = ?',[cart[i].nombre])
-                    id_pizza = data[0].id
-                    precio = parseFloat(data[0].precio)
+                    let id_pizza = data[0].id
+                    let precio = parseFloat(data[0].precio)
                     precio = (precio * cart[i].cantidad).toFixed(2)
                     await conn.query('INSERT INTO detalles_pedido (id_pedido,id_pizza,cantidad,precio) VALUES(?,?,?,?)',[id_pedido,id_pizza,cart[i].cantidad,precio])
                 }
@@ -289,24 +275,22 @@ app.post('/recuperarPassword',async(req,res)=>{
         const {email} = req.body
         const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
         if (user_exists.length>0) {
-            const token = jwt.sign({email:email},JWT_SECRET)
+            const token = jwt.sign({email:email},JWT_SECRET,{expiresIn:'15m'})
             const mailOptions = {
                 from: process.env.CORREO,
                 to: email,
                 subject: "Recuperación de Contraseña",
-                text: `Para recuperar el password, entre en este enlace -> http://localhost:3000/cambiarPassword/${token}`
+                text: `Para recuperar la contraseña entra en este enlace -> ${process.env.FRONTEND_URL}/cambiarPassword/${token}`
             };
             transporter.sendMail(mailOptions, (error, info) => {
                 if (error) {
                     console.log("Error al enviar:", error);
                     res.json({"message":"Error al enviar correo"})
                 }
-                console.log("Correo enviado:", info.response);
             });
             await conn.query('UPDATE usuarios SET token = ? WHERE email = ?',[token,email])
-            res.json({"message":"Correo enviado","token":token})
+            res.json({"message":"Correo enviado"})
         }else{
-            console.log('EL usuario no existe');
             res.json({"message":"El usuario no existe"})
         }
     }catch(error){
@@ -329,11 +313,11 @@ app.post('/cambiarPassword/:token',async(req,res)=>{
                 if (datos.length>0) {
                     const password_equals = await bcrypt.compare(new_password,datos[0].password)
                     if (password_equals) {
-                        res.json({"message":"Las nueva contraseña no puede ser igual a la anterior"})
+                        res.json({"message":"La nueva contraseña no puede ser igual a la anterior"})
                     }else{
                         const new_encripted_password = await bcrypt.hash(new_password,10)
-                        await conn.query('UPDATE usuarios SET password = ?',[new_encripted_password])
-                        await conn.query('UPDATE usuarios SET token = "" WHERE email = ? and token = ?',[email,token])
+                        await conn.query('UPDATE usuarios SET password = ? WHERE email = ?',[new_encripted_password,email])
+                        await conn.query('UPDATE usuarios SET token = "" WHERE email = ?',[email])
                         res.json({"message":"Contraseña cambiada con éxito"})
                     }
                 }
@@ -341,14 +325,16 @@ app.post('/cambiarPassword/:token',async(req,res)=>{
                 res.json({"message":"Contraseñas no coinciden"})
             }
         }else{
-            res.json({"message":"Solo se puede cambiar una vez, solicite nuevo token"})
+            res.json({"message":"Token inválido o expirado"})
         }
     }catch(error){
-        res.json({"message":"Token Invalido"})
+        res.json({"message":"Token inválido"})
     }
 })
 
 //Iniciamos el servidor
-app.listen(5000,()=>{
-    console.log('Escuchando en el 5000');
+const PORT = process.env.PORT || 5000
+app.listen(PORT,()=>{
+    console.log(`Servidor escuchando en puerto ${PORT} en modo producción`)
 })
+
