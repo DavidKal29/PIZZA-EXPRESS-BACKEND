@@ -19,6 +19,10 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+
+//Importamos el Brevo para enviar emails en produccion
+const {brevo,apiInstance} = require('./brevo.js')
+
 //Herramientas para el auth
 const jwt = require('jsonwebtoken')
 const cookieParser = require('cookie-parser')
@@ -78,6 +82,8 @@ app.post('/login',async(req,res)=>{
             res.json({"message":"Usuario no existe"})
         }
     }catch(error){
+        console.log(error);
+        
         res.status(500).json({message:"Error en login"})
     }
 })
@@ -268,33 +274,47 @@ app.get('/obtenerPedidos',async(req,res)=>{
     }
 })
 
-//Ruta para enviar correo de recuperación
-app.post('/recuperarPassword',async(req,res)=>{
-    try{
-        const conn = await pool.getConnection()
-        const {email} = req.body
-        const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
-        if (user_exists.length>0) {
-            const token = jwt.sign({email:email},JWT_SECRET,{expiresIn:'15m'})
-            const mailOptions = {
-                from: process.env.CORREO,
-                to: email,
-                subject: "Recuperación de Contraseña",
-                text: `Para recuperar la contraseña entra en este enlace -> ${process.env.FRONTEND_URL}/cambiarPassword/${token}`
-            };
-            transporter.sendMail(mailOptions, (error, info) => {
-                if (error) {
-                    console.log("Error al enviar:", error);
-                    res.json({"message":"Error al enviar correo"})
-                }
-            });
-            await conn.query('UPDATE usuarios SET token = ? WHERE email = ?',[token,email])
-            res.json({"message":"Correo enviado"})
-        }else{
-            res.json({"message":"El usuario no existe"})
+// Ruta para enviar correo de recuperación
+app.post('/recuperarPassword', async (req, res) => {
+    let conn
+    try {
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ error: errors.array()[0] })
         }
-    }catch(error){
-        res.status(500).json({message:"Error en recuperarPassword"})
+
+        conn = await pool.getConnection()
+        const { email } = req.body
+        const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?', [email])
+
+        if (user_exists.length > 0) {
+            const token = jwt.sign({ email: email }, JWT_SECRET)
+
+            await conn.query('UPDATE usuarios SET token = ? WHERE email = ?', [token, email])
+
+            const sendSmtpEmail = {
+                sender: { name: "Pizza-Express", email: process.env.CORREO },
+                to: [{ email }],
+                subject: "Recuperar Contraseña",
+                textContent: `Para recuperar la contraseña entra en este enlace -> ${process.env.FRONTEND_URL}/cambiarPassword/${token}`,
+                htmlContent: `<p>Para recuperar la contraseña, entra a -> <a href="${process.env.FRONTEND_URL}/cambiarPassword/${token}">Recuperar Contraseña</a></p>`
+            };
+
+            await apiInstance.sendTransacEmail(sendSmtpEmail)
+
+            return res.json({message:'Correo enviado con éxito'})
+
+
+
+        } else {
+            return res.json({ message: "No hay ninguna cuenta asociada a este correo" })
+        }
+
+    } catch (error) {
+        console.error(error)
+        return res.status(500).json({ message: "Error en recuperarPassword" })
+    } finally {
+        if (conn) conn.release()
     }
 })
 
