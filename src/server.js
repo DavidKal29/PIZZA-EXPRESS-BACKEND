@@ -48,9 +48,10 @@ app.get('/',(req,res)=>{
 
 //Ruta de login
 app.post('/login',async(req,res)=>{
+    let conn;
     try{
         let {email,password} = req.body
-        const conn = await pool.getConnection()
+        conn = await pool.getConnection()
         const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
 
         if (user_exists.length>0) {
@@ -71,28 +72,32 @@ app.post('/login',async(req,res)=>{
                     sameSite:'none'
                 })
 
-                conn.release()
+
                 res.json({"user":user_exists[0]})
             }else{
-                conn.release()
+
                 res.json({"message":"Contraseña incorrecta"})
             }
         }else{
-            conn.release()
             res.json({"message":"Usuario no existe"})
         }
     }catch(error){
         console.log(error);
         
         res.status(500).json({message:"Error en login"})
+    }finally{
+        if (conn) {
+            conn.release()
+        }
     }
 })
 
 //Ruta de registro
 app.post('/register',async(req,res)=>{
+    let conn;
     try{
         let {email,username,password} = req.body
-        const conn = await pool.getConnection()
+        conn = await pool.getConnection()
         const encriptedPassword = await bcrypt.hash(password,10)
         const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ? or username = ?',[email,username])
         
@@ -112,11 +117,14 @@ app.post('/register',async(req,res)=>{
                 sameSite:'none'
             })
 
-            conn.release()
             res.json({"user":user})
         }
     }catch(error){
         res.status(500).json({message:"Error en register"})
+    }finally{
+        if (conn) {
+            conn.release()
+        }
     }
 })
 
@@ -164,8 +172,9 @@ app.get('/logout',(req,res)=>{
 
 //Ruta para obtener todas las pizzas
 app.get('/pizzas',async(req,res)=>{
+    let conn;
     try{
-        const conn = await pool.getConnection()
+        conn = await pool.getConnection()
         const consulta = `SELECT p.id,p.nombre,p.precio,p.imagen,GROUP_CONCAT(i.nombre SEPARATOR ',') as ingredientes 
             FROM pizzas p 
             INNER JOIN pizza_ingredientes as pi 
@@ -175,10 +184,13 @@ app.get('/pizzas',async(req,res)=>{
             GROUP BY p.id, p.nombre, p.precio, p.imagen;
         `
         const [results] = await conn.query(consulta)
-        conn.release()
         res.json(results.length>0 ? results : [])
     }catch(error){
         res.status(500).json({message:"Error en /pizzas"})
+    }finally{
+        if (conn) {
+            conn.release()
+        }
     }
 })
 
@@ -203,9 +215,10 @@ const generar_numero_pedido = (id_user)=>{
 
 //Ruta para finalizar compra
 app.post('/finalizarCompra',async(req,res)=>{
+    let conn;
     try{
         const {nombreDestinatario,domicilio,localidad,codigoPostal,puerta,cart} = req.body
-        const conn = await pool.getConnection()
+        conn = await pool.getConnection()
         const result = checkLogin(req,res)
 
         if (result.loggedIn) {
@@ -234,24 +247,27 @@ app.post('/finalizarCompra',async(req,res)=>{
                     await conn.query('INSERT INTO detalles_pedido (id_pedido,id_pizza,cantidad,precio) VALUES(?,?,?,?)',[id_pedido,id_pizza,cart[i].cantidad,precio])
                 }
             }
-            conn.release()
             res.json({"message":"Pedido realizado"})
         }else{
-            conn.release()
             res.json({"message":"Usted no está logueado"})
         }
     }catch(error){
         res.status(500).json({message:"Error en finalizarCompra"})
+    }finally{
+        if (conn) {
+            conn.release()
+        }
     }
 })
 
 //Ruta para obtener pedidos del usuario
 app.get('/obtenerPedidos',async(req,res)=>{
+    let conn;
     try{
         const result = checkLogin(req,res)
         if (result.loggedIn) {
             const user_id = result.user.id
-            const conn = await pool.getConnection()
+            conn = await pool.getConnection()
             const pedidos = []
             const [data] = await conn.query('SELECT * FROM pedidos WHERE id_usuario = ? ORDER BY id DESC',[user_id])
             for (let i = 0; i < data.length; i++) {
@@ -264,21 +280,22 @@ app.get('/obtenerPedidos',async(req,res)=>{
                 const [detalles_pedido] = await conn.query(consulta,[data[i].id])
                 pedidos.push({pedido:data[i], detalles_pedido:detalles_pedido})
             }
-            conn.release()
             res.json({"message":pedidos})
         }else{
             res.json({"message":"Usted no está logueado"})
         }
     }catch(error){
         res.status(500).json({message:"Error en obtenerPedidos"})
+    }finally{
+        if (conn) {
+            conn.release()
+        }
     }
 })
 
 // Ruta para enviar correo de recuperación
 app.post('/recuperarPassword', async (req, res) => {
     let conn
-    console.log('Hola');
-    
     try {
 
         conn = await pool.getConnection()
@@ -311,16 +328,19 @@ app.post('/recuperarPassword', async (req, res) => {
     } catch (error) {
         console.error(error)
         return res.status(500).json({ message: "Error al enviar el email" })
-    } finally {
-        if (conn) conn.release()
+    }finally{
+        if (conn) {
+            conn.release()
+        }
     }
 })
 
 //Ruta para cambiar contraseña
 app.post('/cambiarPassword/:token',async(req,res)=>{
+    let conn;
     try{
         const token = req.params.token
-        const conn = await pool.getConnection()
+        conn = await pool.getConnection()
         const decoded = jwt.verify(token,JWT_SECRET)
         const email = decoded.email
         const [data] = await conn.query('SELECT token FROM usuarios WHERE email = ? and token = ?',[email,token])
@@ -347,6 +367,10 @@ app.post('/cambiarPassword/:token',async(req,res)=>{
         }
     }catch(error){
         res.json({"message":"Token inválido"})
+    }finally{
+        if (conn) {
+            conn.release()
+        }
     }
 })
 
