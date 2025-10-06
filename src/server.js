@@ -277,11 +277,9 @@ app.get('/obtenerPedidos',async(req,res)=>{
 // Ruta para enviar correo de recuperación
 app.post('/recuperarPassword', async (req, res) => {
     let conn
+    console.log('Hola');
+    
     try {
-        const errors = validationResult(req)
-        if (!errors.isEmpty()) {
-            return res.status(400).json({ error: errors.array()[0] })
-        }
 
         conn = await pool.getConnection()
         const { email } = req.body
@@ -312,7 +310,7 @@ app.post('/recuperarPassword', async (req, res) => {
 
     } catch (error) {
         console.error(error)
-        return res.status(500).json({ message: "Error en recuperarPassword" })
+        return res.status(500).json({ message: "Error al enviar el email" })
     } finally {
         if (conn) conn.release()
     }
