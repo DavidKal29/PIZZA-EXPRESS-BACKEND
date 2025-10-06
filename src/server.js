@@ -2,6 +2,8 @@
 const express = require('express')
 const app = express()
 
+const {body,validationResult} = require('express-validator')
+
 const dotenv = require('dotenv').config()
 
 //Herramientas para login/register/api
@@ -92,10 +94,51 @@ app.post('/login',async(req,res)=>{
     }
 })
 
+
+//Validador de los inputs del register
+const validadorRegister = [
+        body('email')
+        .trim()
+        .notEmpty().withMessage('Email no puede estar vacío')
+        .isEmail().withMessage('Debes poner un email válido')
+        .normalizeEmail()
+        .customSanitizer(val=>(val || '').replace(/\s+/g,''))
+        .escape(),
+
+        body('username')
+        .trim()
+        .notEmpty().withMessage('Username no puede estar vacío')
+        .customSanitizer(val=>(val || '').replace(/\s+/g,''))
+        .isLength({min:5,max:15}).withMessage('Username debe contener entre 5 y 15 carácteres')
+        .matches(/^[a-zA-Z0-9_.]+$/).withMessage('Solo se permiten letras, números, guion bajo y punto')
+        .matches(/[a-zA-Z]/).withMessage('Mínimo una letra en Username')
+        .escape(),
+
+        body('password')
+        .trim()
+        .notEmpty().withMessage('Password no puede estar vacío')
+        .matches(/\d/).withMessage('Mínimo un dígito')
+        .isLength({min:8,max:30}).withMessage('Password debe contener entre 8 y 30 carácteres')
+        .matches(/[A-Z]/).withMessage('Mínimo una mayúscula en Password')
+        .matches(/[#$€&%]/).withMessage('Mínimo un carácter especial en Password')
+        .customSanitizer(val=>(val || '').replace(/\s+/g,''))
+        .escape()
+        
+]
+
+
 //Ruta de registro
-app.post('/register',async(req,res)=>{
+app.post('/register',validadorRegister,async(req,res)=>{
     let conn;
     try{
+        const errors = validationResult(req)
+        
+
+        if (!errors.isEmpty()) {
+            
+            return res.json({error:errors.array()[0]})
+        }
+
         let {email,username,password} = req.body
         conn = await pool.getConnection()
         const encriptedPassword = await bcrypt.hash(password,10)
@@ -103,7 +146,7 @@ app.post('/register',async(req,res)=>{
         
         if (user_exists.length>0) {
             conn.release()
-            res.json({"message":"El usuario ya existe"})
+            return res.json({"message":"El usuario ya existe"})
         }else{
             await conn.query('INSERT INTO usuarios (email, username, password) VALUES (?,?,?)',[email,username,encriptedPassword])
             const [user_exists] = await conn.query('SELECT * FROM usuarios WHERE email = ?',[email])
@@ -117,10 +160,10 @@ app.post('/register',async(req,res)=>{
                 sameSite:'none'
             })
 
-            res.json({"user":user})
+            return res.json({"user":user})
         }
     }catch(error){
-        res.status(500).json({message:"Error en register"})
+        return res.status(500).json({message:"Error en register"})
     }finally{
         if (conn) {
             conn.release()
@@ -213,10 +256,61 @@ const generar_numero_pedido = (id_user)=>{
     return numero
 }
 
+
+
+const validadorEnvio = [
+  body("nombreDestinatario")
+    .trim()
+    .notEmpty().withMessage("El nombre del destinatario no puede estar vacío")
+    .isLength({ min: 3, max: 50 }).withMessage("El nombre debe tener entre 3 y 50 caracteres")
+    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/).withMessage("El nombre solo puede contener letras y espacios")
+    .customSanitizer(val => (val || "").replace(/\s+/g, " ").trim())
+    .escape(),
+
+  body("domicilio")
+    .trim()
+    .notEmpty().withMessage("El domicilio no puede estar vacío")
+    .isLength({ min: 5, max: 100 }).withMessage("El domicilio debe tener entre 5 y 100 caracteres")
+    .matches(/^[a-zA-Z0-9À-ÿ\u00f1\u00d1\s.,-]+$/).withMessage("El domicilio solo puede contener letras, números y símbolos básicos como coma o punto")
+    .customSanitizer(val => (val || "").replace(/\s+/g, " ").trim())
+    .escape(),
+
+  body("localidad")
+    .trim()
+    .notEmpty().withMessage("La localidad no puede estar vacía")
+    .isLength({ min: 2, max: 50 }).withMessage("La localidad debe tener entre 2 y 50 caracteres")
+    .matches(/^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/).withMessage("La localidad solo puede contener letras y espacios")
+    .customSanitizer(val => (val || "").replace(/\s+/g, " ").trim())
+    .escape(),
+
+  body("codigoPostal")
+    .trim()
+    .notEmpty().withMessage("El código postal no puede estar vacío")
+    .isLength({ min: 4, max: 10 }).withMessage("El código postal debe tener entre 4 y 10 caracteres")
+    .matches(/^[0-9]{4,10}$/).withMessage("El código postal solo puede contener números")
+    .escape(),
+
+  body("puerta")
+    .notEmpty().withMessage("La puerta debe ponerse, sino lanzaremos el pedido a cualquier puerta")
+    .trim()
+    .isLength({ max: 10 }).withMessage("La puerta no puede tener más de 10 caracteres")
+    .matches(/^[a-zA-Z0-9\-\/]*$/).withMessage("La puerta solo puede contener letras, números, guion o barra")
+    .customSanitizer(val => (val || "").trim())
+    .escape()
+]
+
+
 //Ruta para finalizar compra
-app.post('/finalizarCompra',async(req,res)=>{
+app.post('/finalizarCompra',validadorEnvio,async(req,res)=>{
     let conn;
     try{
+        const errors = validationResult(req)
+        
+        if (!errors.isEmpty()) {
+            
+            return res.json({error:errors.array()[0]})
+        }
+
         const {nombreDestinatario,domicilio,localidad,codigoPostal,puerta,cart} = req.body
         conn = await pool.getConnection()
         const result = checkLogin(req,res)
@@ -252,7 +346,7 @@ app.post('/finalizarCompra',async(req,res)=>{
             res.json({"message":"Usted no está logueado"})
         }
     }catch(error){
-        res.status(500).json({message:"Error en finalizarCompra"})
+        res.status(500).json({message:"Error al finalizar la compra"})
     }finally{
         if (conn) {
             conn.release()
@@ -293,10 +387,26 @@ app.get('/obtenerPedidos',async(req,res)=>{
     }
 })
 
+//Validador del email de recuperación de contraseña
+const validadorRecuperarPassword = [
+        body('email')
+        .trim()
+        .notEmpty().withMessage('Email no puede estar vacío')
+        .isEmail().withMessage('Debes poner un email válido')
+        .normalizeEmail()
+        .customSanitizer(val=>(val || '').replace(/\s+/g,''))
+        .escape()
+]
+
 // Ruta para enviar correo de recuperación
-app.post('/recuperarPassword', async (req, res) => {
+app.post('/recuperarPassword',validadorRecuperarPassword, async (req, res) => {
     let conn
     try {
+        const errors = validationResult(req)
+        
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ message: errors.array()[0].msg })
+        }
 
         conn = await pool.getConnection()
         const { email } = req.body
@@ -335,10 +445,29 @@ app.post('/recuperarPassword', async (req, res) => {
     }
 })
 
+
+//Validador de cambio de contraseña
+const validadorChangePassword = [
+        
+        body('new_password')
+        .trim()
+        .notEmpty().withMessage('Password no puede estar vacío')
+        .matches(/\d/).withMessage('Mínimo un dígito')
+        .isLength({min:8,max:30}).withMessage('Password debe contener entre 8 y 30 carácteres')
+        .matches(/[A-Z]/).withMessage('Mínimo una mayúscula en Password')
+        .matches(/[#$€&%]/).withMessage('Mínimo un carácter especial en Password')
+        .customSanitizer(val=>(val || '').replace(/\s+/g,''))
+        .escape()
+        
+]
+
 //Ruta para cambiar contraseña
-app.post('/cambiarPassword/:token',async(req,res)=>{
+app.post('/cambiarPassword/:token',validadorChangePassword,async(req,res)=>{
     let conn;
     try{
+        const errors = validationResult(req)
+        
+
         const token = req.params.token
         conn = await pool.getConnection()
         const decoded = jwt.verify(token,JWT_SECRET)
@@ -353,6 +482,10 @@ app.post('/cambiarPassword/:token',async(req,res)=>{
                     if (password_equals) {
                         res.json({"message":"La nueva contraseña no puede ser igual a la anterior"})
                     }else{
+                        if (!errors.isEmpty()) {
+                            return res.status(400).json({ message: errors.array()[0].msg })
+                        }
+                        
                         const new_encripted_password = await bcrypt.hash(new_password,10)
                         await conn.query('UPDATE usuarios SET password = ? WHERE email = ?',[new_encripted_password,email])
                         await conn.query('UPDATE usuarios SET token = "" WHERE email = ?',[email])
