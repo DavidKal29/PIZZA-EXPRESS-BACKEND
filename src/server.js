@@ -2,7 +2,7 @@
 const express = require('express')
 const app = express()
 
-const {body,validationResult} = require('express-validator')
+const {body,validationResult, cookie} = require('express-validator')
 
 const dotenv = require('dotenv').config()
 
@@ -30,6 +30,8 @@ const jwt = require('jsonwebtoken')
 const cookieParser = require('cookie-parser')
 const JWT_SECRET=process.env.JWT_SECRET
 
+const csruf = require('csurf')
+
 //Middlewares
 app.use(express.json())
 app.use(express.urlencoded({extended:true}))
@@ -48,8 +50,21 @@ app.get('/',(req,res)=>{
     }
 })
 
+const CSRFProtection = csruf({
+    cookie:{
+        httpOnly:true,
+        secure:true,
+        sameSite:'none'
+    }
+})
+
+
+app.get('/csrf-token',CSRFProtection,(req,res)=>{
+    res.json({csrfToken:req.csrfToken()})
+})
+
 //Ruta de login
-app.post('/login',async(req,res)=>{
+app.post('/login',CSRFProtection,async(req,res)=>{
     let conn;
     try{
         let {email,password} = req.body
@@ -128,7 +143,7 @@ const validadorRegister = [
 
 
 //Ruta de registro
-app.post('/register',validadorRegister,async(req,res)=>{
+app.post('/register',validadorRegister,CSRFProtection,async(req,res)=>{
     let conn;
     try{
         const errors = validationResult(req)
@@ -301,7 +316,7 @@ const validadorEnvio = [
 
 
 //Ruta para finalizar compra
-app.post('/finalizarCompra',validadorEnvio,async(req,res)=>{
+app.post('/finalizarCompra',validadorEnvio,CSRFProtection,async(req,res)=>{
     let conn;
     try{
         const errors = validationResult(req)
@@ -399,7 +414,7 @@ const validadorRecuperarPassword = [
 ]
 
 // Ruta para enviar correo de recuperación
-app.post('/recuperarPassword',validadorRecuperarPassword, async (req, res) => {
+app.post('/recuperarPassword',validadorRecuperarPassword,CSRFProtection, async (req, res) => {
     let conn
     try {
         const errors = validationResult(req)
@@ -462,7 +477,7 @@ const validadorChangePassword = [
 ]
 
 //Ruta para cambiar contraseña
-app.post('/cambiarPassword/:token',validadorChangePassword,async(req,res)=>{
+app.post('/cambiarPassword/:token',validadorChangePassword,CSRFProtection,async(req,res)=>{
     let conn;
     try{
         const errors = validationResult(req)
