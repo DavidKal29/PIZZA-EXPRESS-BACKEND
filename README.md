@@ -1,7 +1,6 @@
 # Pizza-Express Bakcend
 
 Esta es una **API/backend** para una pizzeria llamada **Pizza-Express**, hecha para simular la compra, tramite y visualización de pedidos de pizza, a través de una interfaz estética. 
-⚠️ Este proyecto **no incluye frontend**, está pensado para ser consumido por aplicaciones web, móviles o clientes externos.
 
 ---
 
@@ -12,7 +11,7 @@ Esta es una **API/backend** para una pizzeria llamada **Pizza-Express**, hecha p
 - **Protección de rutas** mediante **JWT**, asegurando que solo usuarios autorizados puedan acceder a ciertas operaciones.
 - **CORS habilitado**, preparado para trabajar con frontend externo.
 - **Envío de emails automáticos** para la recuperación de contraseña.
-- **Middleware de seguridad** con `cookie-parser`.
+- **Middleware de seguridad** con `csurf` y `cookie-parser`.
 
 ---
 
@@ -30,9 +29,12 @@ Para ejecutar este proyecto necesitas:
   - `jsonwebtoken`
   - `bcryptjs`
   - `cookie-parser`
+  - `csurf`
+  - `express-validator`
   - `nodemailer`
   - `nodemon`
   - `cross-env`
+  - `@getbrevo/brevo`
 
 ---
 
@@ -55,7 +57,7 @@ Para ejecutar este proyecto necesitas:
     DATABASE=
     JWT_SECRET=
     CORREO=
-    PASSWORD_DEL_CORREO=
+    APIKEY= (Asegurate de tener cuenta en Brevo y tener la apikey válida)
     PORT=
     FRONTEND_URL=
 
